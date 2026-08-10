@@ -59,6 +59,17 @@ MANUSCRIPT_DIR = ROOT / "manuscript"
 MANIFEST_PATH = MANUSCRIPT_DIR / "manifest.json"
 MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 8000
+# The Supervisor stage compiles the entire manuscript + references + compliance
+# checks in one response — 8000 tokens (~6000 words) isn't enough for a
+# 7000-9000 word manuscript plus everything else, and was silently truncating
+# mid-Discussion, before Conclusion/References ever got generated.
+STAGE_MAX_TOKENS = {
+    "supervisor": 20000,
+}
+
+
+def max_tokens_for(stage: str) -> int:
+    return STAGE_MAX_TOKENS.get(stage, MAX_TOKENS)
 
 
 def load_manifest() -> dict:
@@ -122,7 +133,7 @@ def run_stage(stage: str, input_path: str | None) -> None:
     print(f"Calling Claude for stage '{stage}'...")
     response = client.messages.create(
         model=MODEL,
-        max_tokens=MAX_TOKENS,
+        max_tokens=max_tokens_for(stage),
         system=system_prompt,
         messages=[{"role": "user", "content": user_message}],
     )

@@ -91,23 +91,45 @@ def render_chart(spec: dict, out_dir: Path) -> Path | None:
 
 def render_diagram(spec: dict, out_dir: Path) -> Path | None:
     """Simple labeled-box flow/cycle diagram — not fancy, but real and accurate to the steps given."""
+    import textwrap
+
     steps = spec.get("steps", [])
     if not steps:
         return None
     layout = spec.get("layout", "flow")
 
-    fig, ax = plt.subplots(figsize=(max(6, 1.8 * len(steps)), 2.2))
-    ax.axis("off")
+    # Keep labels short and hard-wrap them ourselves — matplotlib's wrap=True
+    # does NOT respect box boundaries and was causing long labels to overlap
+    # neighboring boxes illegibly. Truncate absurdly long labels outright;
+    # the Visualization prompt is also instructed to keep these short, but
+    # this is a hard safety net regardless of what the model sends.
+    MAX_CHARS = 70
+    WRAP_WIDTH = 16
+    wrapped_steps = []
+    for step in steps:
+        s = step if len(step) <= MAX_CHARS else step[:MAX_CHARS - 1].rstrip() + "…"
+        lines = textwrap.wrap(s, width=WRAP_WIDTH) or [s]
+        wrapped_steps.append(lines)
+
     n = len(steps)
-    box_w, box_h, gap = 1.6, 0.8, 0.5
+    max_lines = max(len(lines) for lines in wrapped_steps)
+    max_line_len = max((len(line) for lines in wrapped_steps for line in lines), default=10)
+
+    box_w = max(1.6, max_line_len * 0.11)
+    box_h = max(0.8, 0.32 * max_lines + 0.3)
+    gap = 0.5
     total_w = n * box_w + (n - 1) * gap
     start_x = -total_w / 2
 
-    for i, step in enumerate(steps):
+    fig, ax = plt.subplots(figsize=(max(6, (box_w + gap) * n), box_h + 1.6))
+    ax.axis("off")
+
+    for i, lines in enumerate(wrapped_steps):
         x = start_x + i * (box_w + gap)
         ax.add_patch(plt.Rectangle((x, -box_h / 2), box_w, box_h,
                                      facecolor="#E6F0F7", edgecolor="#0072B2", linewidth=1.5))
-        ax.text(x + box_w / 2, 0, step, ha="center", va="center", fontsize=9, wrap=True)
+        ax.text(x + box_w / 2, 0, "\n".join(lines), ha="center", va="center",
+                 fontsize=9, linespacing=1.3)
         if i < n - 1:
             arrow_start = x + box_w
             arrow_end = arrow_start + gap
@@ -123,7 +145,7 @@ def render_diagram(spec: dict, out_dir: Path) -> Path | None:
                                      connectionstyle="arc3,rad=0.3"))
 
     ax.set_xlim(start_x - 0.5, start_x + total_w + 0.5)
-    ax.set_ylim(-1.6, 1.0)
+    ax.set_ylim(-box_h - 0.8, box_h / 2 + 0.6)
     ax.set_title(spec.get("title", ""), fontsize=11)
     fig.tight_layout()
 

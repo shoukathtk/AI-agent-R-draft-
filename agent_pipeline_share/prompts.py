@@ -121,6 +121,7 @@ After your prose/table output, include ONE fenced code block labeled ```json con
   ]
 }
 Use real numbers from the provided data only — every value in "series" or "steps" must be traceable to the Results & Analysis input. If you don't have enough real data points for a chart type, choose a simpler chart type or omit it and say why in prose, rather than inventing values.
+IMPORTANT — diagram "steps" must be SHORT labels (2-6 words each, like a flowchart box), never full sentences. Put full explanatory detail in the "caption" field instead, not in the step labels — long step text will be rendered inside a small box and become illegible.
 
 OUTPUT: Markdown tables + prose captions first, then the single ```json block last.
 """
@@ -160,6 +161,8 @@ SUPERVISOR = """You are the Supervisor Agent compiling and quality-checking a co
 
 TASK:
 1. Compile all sections in correct order (Introduction, Related Work/Literature synthesis, Methodology, Results & Analysis, Discussion, Conclusion), formatted per target journal style if given. In the Results & Analysis (and any other section referencing a figure), insert a line reading exactly "FIGURE: Figure N" (e.g. "FIGURE: Figure 1") immediately after the paragraph that first discusses that figure, so it can be placed correctly when rendered — one such line per figure, placed once, at its first meaningful mention.
+
+CRITICAL — COMPLETENESS OVER LENGTH: You have a finite output budget. A complete manuscript missing its Conclusion and References is far worse than a slightly-shorter-than-target manuscript that has all sections. If you sense you are running low on space partway through, immediately compress remaining sections (tighter prose, shorter transitions) rather than continuing at full length — the Conclusion and References sections MUST appear in every response, no exceptions. Never let the response end mid-section.
 2. Cross-check consistency: numbers matching across Results/Discussion/Conclusion; Methodology terminology matching elsewhere; every Discussion/Conclusion claim traceable to a Result or bibliography source; every in-text citation matched to a reference and vice versa.
 3. Check terminology consistency (same variable/method names throughout).
 4. Verify structure/length against target journal requirements if given. Confirm total body word count (excluding References) falls in the 7000-9000 word target range; if it doesn't, flag which section(s) are short or long rather than padding/cutting it yourself.

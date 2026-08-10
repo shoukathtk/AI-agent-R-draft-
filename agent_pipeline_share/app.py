@@ -105,6 +105,15 @@ def render_stage_panel(stage: str):
     state = stage_state(stage)
     out_file = pl.stage_filename(stage)
 
+    if st.session_state.get("truncation_warning") == stage:
+        st.warning(
+            "⚠️ This draft hit the token limit and was cut off mid-way — it is "
+            "INCOMPLETE (e.g. Conclusion and/or References may be missing entirely "
+            "if this was the Supervisor stage). Do not approve this draft as-is. "
+            "Consider shortening your inputs or reducing target word counts, then re-run."
+        )
+        del st.session_state["truncation_warning"]
+
     needs_input = stage in ("literature", "methodology", "results_analysis", "visualization")
     extra_input_text = ""
     if needs_input:
@@ -143,7 +152,7 @@ def render_stage_panel(stage: str):
                             )
                             response = client.messages.create(
                                 model=pl.MODEL,
-                                max_tokens=pl.MAX_TOKENS,
+                                max_tokens=pl.max_tokens_for(stage),
                                 system=system_prompt,
                                 messages=[{"role": "user", "content": user_message}],
                             )
@@ -161,6 +170,8 @@ def render_stage_panel(stage: str):
                                 m["generated"][stage] = True
                                 m["approved"][stage] = False
                                 pl.save_manifest(m)
+                                if getattr(response, "stop_reason", None) == "max_tokens":
+                                    st.session_state["truncation_warning"] = stage
                                 refresh()
                                 st.rerun()
                         except pl.anthropic.APIError as e:
