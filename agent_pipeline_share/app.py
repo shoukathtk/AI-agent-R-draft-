@@ -1,5 +1,5 @@
 """
-Streamlit web UI for the SCI/Scopus paper drafting pipeline.
+Streamlit web UI for the AI Agent.
 
 Wraps pipeline.py's logic in a card-grid dashboard (similar to the
 agent-marketplace screenshot): one card per stage, greyed out until its
