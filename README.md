@@ -1,112 +1,78 @@
-# SCI/Scopus paper drafting pipeline
+# Citation verification module
 
-A sequential, human-gated agent pipeline for drafting an academic manuscript:
+Replaces the Literature Agent's self-reported (unreliable) indexing claims
+with real, checkable results.
 
-```
-literature → introduction → methodology → results_analysis → visualization
-    → discussion → conclusion → supervisor
-```
+## What's actually free and automated
 
-Each stage is one Claude API call. Nothing runs automatically end-to-end —
-you review and `approve` each stage's output before the next stage can use
-it as input. This is deliberate: a fabricated citation or an unverified
-"Scopus-indexed" claim slipping through unattended is the single biggest
-risk in this workflow.
+| Check | Source | Cost | Live/cached |
+|---|---|---|---|
+| Citation exists (DOI resolves, title/authors match) | Crossref API | Free, no key | Live |
+| Scopus indexing status | Official Scopus Source List spreadsheet | Free download | Cached snapshot (re-download every few months) |
+| Scopus indexing status (alternative) | Elsevier Serial Title API | Free registered key, rate-limited | Live |
+| Web of Science / SCIE indexing status | — | — | **No free automated option — manual check only** |
+
+Be honest with yourself about that last row: anything in this pipeline
+claiming automated WoS verification would be lying to you. Every WoS status
+this module reports is `MANUAL_CHECK_REQUIRED` by design.
 
 ## Setup
 
 ```bash
-pip install -r requirements.txt --break-system-packages
-export ANTHROPIC_API_KEY=sk-...
+pip install openpyxl --break-system-packages   # only needed if using the raw .xlsx source list
 ```
 
-## Web UI (recommended)
+1. **Scopus Source List** (recommended, free, no signup):
+   Download from https://www.elsevier.com/products/scopus/scopus-source-list
+   — grab the latest "Scopus Source List" / "Source Titles" file. Export it
+   to CSV (Excel: File > Save As > CSV) for fastest loading, or point the
+   script at the raw `.xlsx`.
+
+2. **(Optional) Elsevier API key** for live lookups instead of the static
+   list: register free at https://dev.elsevier.com. Gives you current data
+   instead of a point-in-time snapshot, at the cost of a daily quota.
+
+## Usage
 
 ```bash
-export ANTHROPIC_API_KEY=sk-...
-streamlit run app.py
+cd verification
+python verify_references.py ../manuscript/01_literature.md \
+    --scopus-source-list ./scopus_source_list.csv
 ```
 
-Opens a card-grid dashboard in your browser — one card per stage, greyed out
-until its dependencies are approved. Click a card to open a run/review/edit/
-approve panel for that stage. This is a thin UI layer over `pipeline.py`'s
-logic — the CLI below still works identically and both share the same
-`manuscript/` state, so you can mix and match.
-
-## CLI flow
+or, with a live API key instead of the CSV:
 
 ```bash
-# Stage 1: Literature — give it your topic and any known seed papers/keywords
-echo "Topic: effect of X on Y in Z population. Seed keywords: ..." > topic.txt
-python pipeline.py run literature --input topic.txt
-
-# Read manuscript/01_literature.md. Edit it by hand if needed
-# (e.g. remove a source, fix an indexing status).
-# IMPORTANT: manually verify indexing status via Scopus/Web of Science —
-# the model cannot reliably self-certify this from memory.
-python pipeline.py approve literature
-
-# Stage 2: Introduction — auto-pulls the approved literature output
-python pipeline.py run introduction
-python pipeline.py approve introduction
-
-# Stage 3: Methodology — give it your actual research design notes
-python pipeline.py run methodology --input methodology_notes.txt
-python pipeline.py approve methodology
-
-# Stage 4: Results & Analysis — give it your real data/stats output
-python pipeline.py run results_analysis --input results_data.txt
-python pipeline.py approve results_analysis
-
-# Stage 5: Visualization — renders the planned tables/graphs/diagrams
-python pipeline.py run visualization
-python pipeline.py approve visualization
-
-# Stage 6: Discussion — pulls literature + intro + results + visuals
-python pipeline.py run discussion
-python pipeline.py approve discussion
-
-# Stage 7: Conclusion
-python pipeline.py run conclusion
-python pipeline.py approve conclusion
-
-# Stage 8: Supervisor — compiles everything + runs compliance checks
-# (visual count minimums, citation indexing, cross-section consistency)
-python pipeline.py run supervisor
+python verify_references.py ../manuscript/01_literature.md \
+    --scopus-api-key YOUR_KEY
 ```
 
-Check progress at any point:
+This writes `../manuscript/01_literature_VERIFIED.md` — a table showing,
+per reference: whether Crossref confirms the citation exists, whether the
+journal matches an active Scopus source (with CiteScore if found), and a
+reminder that WoS needs a manual check. It never overwrites your original
+literature draft.
 
-```bash
-python pipeline.py status
-```
+## Recommended workflow
 
-## Files
+1. `python pipeline.py run literature --input topic.txt`
+2. `cd verification && python verify_references.py ../manuscript/01_literature.md --scopus-source-list ...`
+3. Open the `_VERIFIED.md` file. For anything marked `NOT_FOUND`,
+   `NOT_IN_SCOPUS_LIST`, or `SOURCE_LIST_UNAVAILABLE`, either remove that
+   source from the manuscript or manually confirm it another way.
+4. Manually check WoS/SCIE status per source at https://mjl.clarivate.com
+   for any journal you plan to cite as SCI-indexed specifically.
+5. Hand-edit `manuscript/01_literature.md` to reflect the confirmed statuses.
+6. `python ../pipeline.py approve literature`
 
-- `prompts.py` — the system prompt for each stage. Edit these to tune tone,
-  strictness, field-specific conventions, or journal-specific requirements.
-- `pipeline.py` — the CLI orchestrator (dependency tracking, API calls, file I/O).
-- `manuscript/` — generated per-stage drafts (`01_literature.md`, etc.) and
-  `manifest.json` tracking what's been generated/approved.
+## Known limitations
 
-## Editing a stage after approval
-
-If you edit an already-approved `.md` file by hand and want downstream
-stages to see your edits, just leave it approved — downstream stages always
-read the current file contents, not a snapshot from generation time. Only
-re-run the stage via `python pipeline.py run <stage>` if you want Claude to
-regenerate it; that will reset its approval flag.
-
-## What this does NOT do for you
-
-- **Real citation indexing verification.** The Literature agent states what
-  it believes the indexing status is; it does not query Scopus or Web of
-  Science. Treat every "Scopus-indexed" / "SCIE-indexed" tag as a claim to
-  verify, not a fact.
-- **Actual chart rendering.** The Visualization stage produces chart
-  specifications and captions, not rendered image files. If you want actual
-  PNG/SVG figures, that's a good next extension — e.g. a stage that takes the
-  Visualization agent's chart-spec output and generates plots via
-  matplotlib/Code Execution.
-- **Plagiarism/similarity checking.** Run the Supervisor's compiled output
-  through your institution's similarity checker before submission.
+- Crossref's title-search fallback (used when no DOI is given) is a cheap
+  token-overlap match, not real semantic matching — it can miss legitimate
+  matches with reworded titles, or occasionally match the wrong paper if
+  titles are very similar. Spot-check anything marked `CONFIRMED_FUZZY`.
+- The Scopus Source List is a snapshot — a journal added or delisted since
+  your download won't be reflected. Re-download periodically for active work.
+- This checks *whether a journal is indexed*, not whether the specific
+  cited article is genuinely as described — that still requires a human to
+  actually read the source.
