@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from prompts import STAGES, STAGE_ORDER
 import pipeline as pl
 
-st.set_page_config(page_title="SCI Paper Agent Pipeline", layout="wide")
+st.set_page_config(page_title="AI Agent", layout="wide")
 
 STAGE_LABELS = {
     "literature": "Literature",
@@ -114,7 +114,7 @@ def render_stage_panel(stage: str):
             if not os.environ.get("ANTHROPIC_API_KEY"):
                 st.error("ANTHROPIC_API_KEY is not set in the environment.")
             else:
-                with st.spinner(f"Calling Claude for '{stage}'..."):
+                with st.spinner(f"Your agent is on it — one moment '{stage}'..."):
                     unmet = pl.check_deps(stage, st.session_state.manifest)
                     if unmet:
                         st.error(f"Missing approved dependencies: {', '.join(unmet)}")
